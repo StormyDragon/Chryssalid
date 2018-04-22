@@ -33,13 +33,12 @@ function unsetCloseOnExec(descriptor) {
 }
 
 function changeToPython(server_socket, load_socket) {
-    // Drop the descriptor on the floor
+    // Bring a select elite of file descriptors with us to the glory days.
     unsetCloseOnExec(server_socket);
     unsetCloseOnExec(load_socket);
     unsetCloseOnExec(0);
     unsetCloseOnExec(1);
     unsetCloseOnExec(2);
-    //console.error('replacing with python now!', {descriptor});
     const pythonhome = `${process.cwd()}/python`;
     const app = `${pythonhome}/bin/python`;
     const args = ['-m', 'worker'];
