@@ -7,7 +7,6 @@ from logging.handlers import MemoryHandler
 
 import flask
 import requests
-import atexit
 
 CODE_LOCATION_DIR = os.environ.get("X_GOOGLE_CODE_LOCATION")
 PACKAGE_JSON_FILE = CODE_LOCATION_DIR + '/package.json'
@@ -76,7 +75,6 @@ class SupervisorHandler(MemoryHandler):
 
 
 memory_handler = SupervisorHandler(MAX_LOG_BATCH_ENTRIES, flushLevel=logging.ERROR)
-atexit.register(memory_handler.flush_all)
 root_logger = logging.getLogger('')
 root_logger.addHandler(memory_handler)
 
@@ -139,7 +137,6 @@ if __name__ == '__main__':
         return flask.Response(res, 404)
 
 
-    logger.info("Python ready to serve")
     memory_handler.flush()
 
     try:
@@ -148,7 +145,8 @@ if __name__ == '__main__':
         socket.close()
 
         os.environ['WERKZEUG_SERVER_FD'] = os.environ['SERVER_DESCRIPTOR']
-        logger.error(f"{os.environ}")
+        logger.debug(f"{os.environ}")
+        logger.info("Python ready to serve")
         app.run(host='0.0.0.0', port=int(WORKER_PORT))
     except Exception as ex:
         logger.error(f"Failure: {ex}")
