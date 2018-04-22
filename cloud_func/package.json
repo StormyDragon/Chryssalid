@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "ffi": "^2.2.0"
+    "ffi": "^2.2.0",
+    "ref-array": "^1.2.0"
   }
 }
