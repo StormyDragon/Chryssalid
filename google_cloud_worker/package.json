@@ -1,0 +1,13 @@
+{
+  "dependencies": {
+    "body-parser": "^1.18.2",
+    "domain": "^0.0.1",
+    "express": "^4.16.3",
+    "ffi": "^2.2.0",
+    "fs": "^0.0.1-security",
+    "http": "^0.0.0",
+    "on-finished": "^2.3.0",
+    "ref-array": "^1.2.0",
+    "util": "^0.10.3"
+  }
+}
