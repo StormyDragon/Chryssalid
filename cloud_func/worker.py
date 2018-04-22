@@ -60,7 +60,7 @@ class SupervisorHandler(MemoryHandler):
         return {
             "TextPayload": payload,
             "Severity": severity,
-            "Time": time.now(timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+            "Time": time.isoformat(timespec='milliseconds').replace('+00:00', 'Z')
         }
 
     def flush(self):
