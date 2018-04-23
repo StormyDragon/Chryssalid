@@ -5,8 +5,11 @@ ENV PYENV_ROOT="/app/pyenv" \
     PATH="$PYENV_ROOT/bin:$PATH"
 RUN git clone https://github.com/pyenv/pyenv.git pyenv \
  && ./pyenv/bin/pyenv install 3.6.5 \
- && ./pyenv/versions/3.6.5/bin/python -m pip install pipenv
+ && ./pyenv/versions/3.6.5/bin/python -m pip install --upgrade pipenv pip
 COPY cloud_func/Pipfile cloud_func/Pipfile.lock ./
+RUN ./pyenv/versions/3.6.5/bin/python -m pipenv lock --requirements > requirements.txt \
+ && ./pyenv/versions/3.6.5/bin/python -m pip install -r requirements.txt
+COPY user_code/Pipfile user_code/Pipfile.lock ./
 RUN ./pyenv/versions/3.6.5/bin/python -m pipenv lock --requirements > requirements.txt \
  && ./pyenv/versions/3.6.5/bin/python -m pip install -r requirements.txt
 
@@ -23,6 +26,7 @@ WORKDIR /app
 COPY cloud_func/package.json cloud_func/yarn.lock ./
 RUN yarn install
 COPY cloud_func ./
+COPY user_code ./user_code
 RUN zip -9 -r package.zip .
 
 ENV \
