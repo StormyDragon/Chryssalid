@@ -5,6 +5,13 @@ Grow within your enemy, then burst out.
 Replace google cloud function node interpreter with arbitrary code
 Instead of using node as a shim, simply replace node.js and be master control program of the container.
 
+### How does it work?
+The node worker script `google_cloud_worker/worker.js` was built into the container by the cloud function deployment
+machinery and is untouchable by our code until the `/load` endpoint is called, this is triggered by a "cold start"
+before the first connection is made. Our code usurps the node process and executes our own, in the process handing the
+connected `/load` and listening file descriptor to it, it is then that we send the answer to load, and
+accept new connections on the listener.
+
 ## Worker needs
 Google cloud functions consists of a webserver that accepts
 three 'paths' as well as communication via http with a supervisor
