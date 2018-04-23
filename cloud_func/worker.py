@@ -1,12 +1,12 @@
+import importlib.util
 import logging
 import os
 import socket
-import sys
-from datetime import datetime, timezone
-from logging.handlers import MemoryHandler
+from traceback import format_exception
 
 import flask
-import requests
+
+from supervisor_logger import Supervisor, SupervisorHandler
 
 CODE_LOCATION_DIR = os.environ.get("X_GOOGLE_CODE_LOCATION")
 PACKAGE_JSON_FILE = CODE_LOCATION_DIR + '/package.json'
@@ -15,7 +15,7 @@ SUPERVISOR_HOSTNAME = os.environ.get("X_GOOGLE_SUPERVISOR_HOSTNAME", None)
 SUPERVISOR_INTERNAL_PORT = os.environ.get("X_GOOGLE_SUPERVISOR_INTERNAL_PORT", None)
 FUNCTION_TRIGGER_TYPE = os.environ.get("X_GOOGLE_FUNCTION_TRIGGER_TYPE")
 FUNCTION_NAME = os.environ.get("X_GOOGLE_FUNCTION_NAME")
-FUNCTION_TIMEOUT_SEC = os.environ.get("X_GOOGLE_FUNCTION_TIMEOUT_SEC")
+FUNCTION_TIMEOUT_SEC = os.environ.get("X_GOOGLE_FUNCTION_TIMEOUT_SEC", 0)
 WORKER_PORT = os.environ.get("X_GOOGLE_WORKER_PORT")
 
 FUNCTION_STATUS_HEADER_FIELD = 'X-Google-Status'
@@ -24,59 +24,8 @@ EXECUTE_PREFIX = '/execute'
 MAX_LOG_LENGTH = 5000
 MAX_LOG_BATCH_ENTRIES = 1500
 MAX_LOG_BATCH_LENGTH = 150000
-SUPERVISOR_LOG_TIMEOUT_MS = max(60, int(FUNCTION_TIMEOUT_SEC) if FUNCTION_TIMEOUT_SEC else 0) * 1000
-SUPERVISOR_KILL_TIMEOUT_MS = 5000
-
-
-class SupervisorTasks:
-    KILL = "_ah/kill"
-    LOG = "_ah/log"
-
-
-def kill_instance():
-    post_to_supervisor(SupervisorTasks.KILL, '', SUPERVISOR_KILL_TIMEOUT_MS, lambda: sys.exit(16))
-
-
-def post_to_supervisor(path, post_data, timeout, callback=lambda x: None):
-    try:
-        url = f"http://{SUPERVISOR_HOSTNAME}:{SUPERVISOR_INTERNAL_PORT}/{path}"
-        response = requests.post(url, json=post_data, timeout=timeout)
-        response.raise_for_status()
-    except requests.Timeout as ex:
-        callback("Supervisor request timed out")
-    except requests.HTTPError as ex:
-        callback("Supervisor responded inappropriately.")
-    except requests.exceptions.InvalidURL:
-        print(post_data)
-
-
-class SupervisorHandler(MemoryHandler):
-    def log_entry(self, record):
-        payload = record.getMessage()
-        severity = record.levelname
-        time = datetime.fromtimestamp(record.created)
-        time = time.replace(tzinfo=timezone.utc)
-        return {
-            "TextPayload": payload,
-            "Severity": severity,
-            "Time": time.isoformat(timespec='milliseconds').replace('+00:00', 'Z')
-        }
-
-    def flush(self):
-        records, self.buffer = self.buffer[:MAX_LOG_BATCH_ENTRIES], self.buffer[MAX_LOG_BATCH_ENTRIES:]
-        if records:
-            output = {'Entries': [self.log_entry(record) for record in records]}
-            post_to_supervisor(SupervisorTasks.LOG, output, SUPERVISOR_LOG_TIMEOUT_MS)
-        return bool(records)
-
-    def flush_all(self):
-        while self.flush():
-            pass
-
-
-memory_handler = SupervisorHandler(MAX_LOG_BATCH_ENTRIES, flushLevel=logging.ERROR)
-root_logger = logging.getLogger('')
-root_logger.addHandler(memory_handler)
+SUPERVISOR_LOG_TIMEOUT_SEC = max(60, int(FUNCTION_TIMEOUT_SEC))
+SUPERVISOR_KILL_TIMEOUT_SEC = 5
 
 logging.getLogger('flask').setLevel('DEBUG')
 
@@ -86,14 +35,23 @@ logger.setLevel('DEBUG')
 worker = flask.Blueprint('worker', __name__)
 
 
-@worker.route('/load', methods=['GET'])
-def load():
-    return flask.Response('User function is ready', status=200)
+class LoadSocketResponder:
+    def __init__(self, *, fileno):
+        self.load_socket = socket.socket(fileno=fileno)
 
+    def __enter__(self):
+        pass
 
-@worker.route('/check', methods=['GET'])
-def check():
-    return flask.Response('', status=200)
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_tb is exc_type is exc_val is None:
+            self.load_socket.send(b'HTTP/1.1 200 OK\r\nContent-Length: 22\r\n\r\nUser function is ready')
+        else:
+            exception_message = ''.join(format_exception(exc_type, exc_val, exc_tb)).encode('utf8')
+            headers = ("HTTP/1.1 200 OK\r\n"
+                       "X-Google-Status: load_error\r\n"
+                       f"Content-Length: {len(exception_message)}\r\n\r\n")
+            self.load_socket.send(headers.encode('utf8') + exception_message)
+        self.load_socket.close()
 
 
 def cloud_endpoints(*blueprints):
@@ -110,45 +68,57 @@ def cloud_endpoints(*blueprints):
     return app
 
 
-if __name__ == '__main__':
-    user_functions = flask.Blueprint('user_function', __name__)
+def main():
+    supervisor = Supervisor(
+        hostname=SUPERVISOR_HOSTNAME, port=int(SUPERVISOR_INTERNAL_PORT),
+        log_timeout_secs=SUPERVISOR_LOG_TIMEOUT_SEC,
+        kill_timeout_secs=SUPERVISOR_KILL_TIMEOUT_SEC)
+    memory_handler = SupervisorHandler(
+        supervisor, MAX_LOG_BATCH_ENTRIES, MAX_LOG_LENGTH, flushLevel=logging.ERROR)
 
+    root_logger = logging.getLogger()
+    root_logger.setLevel('DEBUG')
+    root_logger.addHandler(memory_handler)
 
-    @user_functions.route('/')
-    def hello():
-        logger.info("Hoy!")
-        return "Hello from Python!"
+    application = flask.Flask(__name__)
 
+    @application.route('/load', methods=['GET'])
+    def load():
+        return flask.Response('User function is ready', status=200)
 
-    app = cloud_endpoints(user_functions)
+    @application.route('/check', methods=['GET'])
+    def check():
+        return flask.Response('', status=200)
 
-
-    @app.after_request
+    @application.teardown_request
     def flush_logs(response):
         memory_handler.flush_all()
         return response
 
-
-    @app.route('/', defaults={"path": ''})
-    @app.route('/<path:path>')
+    @application.route('/', defaults={"path": ''})
+    @application.route('/<path:path>')
     def catch_all(path):
-        res = f"Requested path has no handler associated: {path}"
+        res = f"Requested path has no associated handler: {path}"
         logger.warning(res)
         return flask.Response(res, 404)
 
-
-    memory_handler.flush()
-
     try:
-        socket = socket.socket(fileno=int(os.environ['LOAD_DESCRIPTOR']))
-        socket.send(b'HTTP/1.1 200 OK\r\nContent-Length: 22\r\n\r\nUser function is ready')
-        socket.close()
+        with LoadSocketResponder(fileno=int(os.environ['LOAD_DESCRIPTOR'])):
+            spec = importlib.util.spec_from_file_location("cloud", f"{CODE_LOCATION_DIR}/user_code/cloud.py")
+            cloud = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(cloud)
+            application.register_blueprint(cloud.blueprint, url_prefix='/execute')
 
         os.environ['WERKZEUG_SERVER_FD'] = os.environ['SERVER_DESCRIPTOR']
         logger.debug(f"{os.environ}")
         logger.info("Python ready to serve")
-        app.run(host='0.0.0.0', port=int(WORKER_PORT))
+        application.run(host='0.0.0.0', port=int(WORKER_PORT))
     except Exception as ex:
         logger.error(f"Failure: {ex}")
     finally:
-        kill_instance()
+        memory_handler.flush_all()
+        supervisor.kill_instance()
+
+
+if __name__ == '__main__':
+    main()
