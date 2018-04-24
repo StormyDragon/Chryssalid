@@ -54,20 +54,6 @@ class LoadSocketResponder:
         self.load_socket.close()
 
 
-def cloud_endpoints(*blueprints):
-    app = flask.Flask(__name__)
-    app.register_blueprint(worker)
-
-    @app.route('/execute')
-    def execute_redir():
-        return flask.redirect('/execute/')
-
-    for blue in blueprints:
-        app.register_blueprint(blue, url_prefix='/execute')
-
-    return app
-
-
 def main():
     supervisor = Supervisor(
         hostname=SUPERVISOR_HOSTNAME, port=int(SUPERVISOR_INTERNAL_PORT),
