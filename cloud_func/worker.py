@@ -77,9 +77,8 @@ def main():
         return flask.Response('', status=200)
 
     @application.teardown_request
-    def flush_logs(response):
+    def flush_logs(exc):
         memory_handler.flush_all()
-        return response
 
     @application.route('/', defaults={"path": ''})
     @application.route('/<path:path>')
