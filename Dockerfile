@@ -17,7 +17,6 @@ FROM gcr.io/google-appengine/nodejs as final
 RUN install_node v6.11.5
 RUN apt-get update \
  && apt-get install -y zip
-COPY --from=py_build /app/pyenv/versions/3.6.5 /app/python
 WORKDIR /tmp/cloud_worker
 COPY google_cloud_worker/yarn.lock google_cloud_worker/package.json ./
 RUN yarn install
@@ -26,6 +25,7 @@ WORKDIR /app
 COPY cloud_func/package.json cloud_func/yarn.lock ./
 RUN yarn install
 COPY cloud_func ./
+COPY --from=py_build /app/pyenv/versions/3.6.5 /app/python
 COPY user_code ./user_code
 RUN zip -9 -r package.zip .
 
