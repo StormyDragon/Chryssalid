@@ -45,22 +45,26 @@ def pong(fileno):
 
 
 class LoadSocketResponder:
-    def __init__(self, *, fileno):
-        self.load_socket = socket.socket(fileno=fileno)
+    def __init__(self, *, sockets):
+        self.sockets = sockets
 
     def __enter__(self):
         pass
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_tb is exc_type is exc_val is None:
-            self.load_socket.send(b'HTTP/1.1 200 OK\r\nContent-Length: 22\r\n\r\nUser function is ready')
+            message = b'HTTP/1.1 200 OK\r\nContent-Length: 22\r\n\r\nUser function is ready'
         else:
             exception_message = ''.join(format_exception(exc_type, exc_val, exc_tb)).encode('utf8')
             headers = ("HTTP/1.1 200 OK\r\n"
                        "X-Google-Status: load_error\r\n"
                        f"Content-Length: {len(exception_message)}\r\n\r\n")
-            self.load_socket.send(headers.encode('utf8') + exception_message)
-        self.load_socket.close()
+            message = headers.encode('utf8') + exception_message
+
+        for s in self.sockets:
+            load_socket = socket.socket(fileno=s)
+            load_socket.send(message)
+            load_socket.close()
 
 
 def main():
@@ -69,17 +73,14 @@ def main():
         log_timeout_secs=SUPERVISOR_LOG_TIMEOUT_SEC,
         kill_timeout_secs=SUPERVISOR_KILL_TIMEOUT_SEC)
     memory_handler = SupervisorHandler(
-        supervisor, MAX_LOG_BATCH_ENTRIES, MAX_LOG_LENGTH, flushLevel=logging.WARNING)
+        supervisor, MAX_LOG_BATCH_ENTRIES, MAX_LOG_LENGTH, flushLevel=logging.INFO)
 
     root_logger = logging.getLogger()
     root_logger.setLevel('DEBUG')
     root_logger.addHandler(memory_handler)
 
-    sockets = [int(s) for s in os.environ['SOCKET_TRANSFERRENCE'].split(',')]
-    logger.error('Welcome to python! Enjoy your stay.', sockets=sockets)
-
+    sockets = sorted(int(s) for s in os.environ['SOCKET_TRANSFERRENCE'].split('_'))
     server_socket = sockets[0]  # The first socket is the listening socket.
-    load_socket = sockets[-1]  # Guess that last socket is the loading request in progress.
 
     application = flask.Flask(__name__)
 
@@ -98,20 +99,21 @@ def main():
     @application.route('/', defaults={"path": ''})
     @application.route('/<path:path>', methods=['GET', 'PUT', 'POST', 'DELETE', 'HEAD', 'PATCH'])
     def catch_all(path):
-        res = f"Requested path has no associated handler: {path}"
-        logger.error(res, method=flask.request.method, json=flask.request.json, headers=flask.request.headers)
+        data = dict(method=flask.request.method, json=flask.request.json, headers=flask.request.headers)
+        res = f"Requested path has no associated handler: {path}\n\n{data!r}"
+        logger.error(res)
         return flask.Response('', status=200)  # Not an error then?
 
     try:
-        # pong(int(os.environ['PING_DESCRIPTOR']))
-        with LoadSocketResponder(fileno=load_socket):
+        with LoadSocketResponder(sockets=sockets[1:]):
             spec = importlib.util.spec_from_file_location("cloud", f"{CODE_LOCATION_DIR}/user_code/cloud.py")
             cloud = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(cloud)
             application.register_blueprint(cloud.blueprint, url_prefix='/execute')
 
+        logger.debug(f'Welcome to python! Enjoy your stay. sockets: {sockets!r}')
+        memory_handler.flush_all()
         os.environ['WERKZEUG_SERVER_FD'] = str(server_socket)
-        logger.info("Python ready to serve")
         application.run(host='0.0.0.0', port=int(WORKER_PORT))
     except Exception as ex:
         logger.error(f"Failure: {ex}")

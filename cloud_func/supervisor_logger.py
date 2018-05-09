@@ -55,7 +55,8 @@ class Supervisor:
             url = f"http://{self.supervisor_hostname}:{self.supervisor_port}/{path}"
             with supress_logging():
                 response = requests.post(url, json=post_data, timeout=timeout)
-            response.raise_for_status()
+            if response.status_code != 200:
+                logging.getLogger().debug('Could not communicate with Supervisor')
         except requests.Timeout as ex:
             callback("Supervisor request timed out")
         except requests.HTTPError as ex:
