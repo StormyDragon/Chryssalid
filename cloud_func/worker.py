@@ -35,6 +35,13 @@ logger.setLevel('DEBUG')
 worker = flask.Blueprint('worker', __name__)
 
 
+def pong(fileno):
+    s = socket.socket(fileno=fileno)
+    headers = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK"
+    s.send(headers.encode('utf8'))
+    s.close()
+
+
 class LoadSocketResponder:
     def __init__(self, *, fileno):
         self.load_socket = socket.socket(fileno=fileno)
@@ -81,13 +88,14 @@ def main():
         memory_handler.flush_all()
 
     @application.route('/', defaults={"path": ''})
-    @application.route('/<path:path>')
+    @application.route('/<path:path>', methods=['GET', 'PUT', 'POST', 'DELETE', 'HEAD', 'PATCH'])
     def catch_all(path):
         res = f"Requested path has no associated handler: {path}"
-        logger.warning(res)
-        return flask.Response(res, 404)
+        logger.warning(res, method=flask.request.method, json=flask.request.json)
+        return flask.Response('', status=200)  # Not an error then?
 
     try:
+        pong(int(os.environ['PING_DESCRIPTOR']))
         with LoadSocketResponder(fileno=int(os.environ['LOAD_DESCRIPTOR'])):
             spec = importlib.util.spec_from_file_location("cloud", f"{CODE_LOCATION_DIR}/user_code/cloud.py")
             cloud = importlib.util.module_from_spec(spec)
@@ -95,7 +103,6 @@ def main():
             application.register_blueprint(cloud.blueprint, url_prefix='/execute')
 
         os.environ['WERKZEUG_SERVER_FD'] = os.environ['SERVER_DESCRIPTOR']
-        logger.debug(f"{os.environ}")
         logger.info("Python ready to serve")
         application.run(host='0.0.0.0', port=int(WORKER_PORT))
     except Exception as ex:

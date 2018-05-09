@@ -32,9 +32,10 @@ function unsetCloseOnExec(descriptor) {
     lib.fcntl(descriptor, F_SETFD, (flags & ~FD_CLOEXEC));
 }
 
-function changeToPython(server_socket, load_socket) {
+function changeToPython(server_socket, ping_socket, load_socket) {
     // Bring a select elite of file descriptors with us to the glory days.
     unsetCloseOnExec(server_socket);
+    unsetCloseOnExec(ping_socket);
     unsetCloseOnExec(load_socket);
     unsetCloseOnExec(0);
     unsetCloseOnExec(1);
@@ -49,6 +50,7 @@ function changeToPython(server_socket, load_socket) {
         `PYTHONHOME=${pythonhome}`,
         `PYTHONPATH=${pythonhome}`,
         `SERVER_DESCRIPTOR=${server_socket}`,
+        `PING_DESCRIPTOR=${ping_socket}`,
         `LOAD_DESCRIPTOR=${load_socket}`,
     ];
     // Close your eyes and forget all about node.
@@ -69,6 +71,5 @@ let sockets = output.map(d => {
 }).filter(s => s !== null).map(s => parseInt(s)).sort((a,b) => a-b);
 
 console.log(`Descriptors: ${output.length} - Sockets: ${sockets.length}`);
-const [descriptor, load_socket] = [sockets[0], sockets.slice(-1)[0]];
 console.log("Queueing for python to take over.");
-changeToPython(descriptor, load_socket);
+changeToPython(...sockets);
