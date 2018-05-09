@@ -34,9 +34,9 @@ function unsetCloseOnExec(descriptor) {
 
 function changeToPython(...sockets) {
     // Bring a select elite of file descriptors with us to the glory days.
-    sockets.forEach(socket => {
+    for (const socket of sockets) {
         unsetCloseOnExec(socket);
-    });
+    }
     unsetCloseOnExec(0);
     unsetCloseOnExec(1);
     unsetCloseOnExec(2);
@@ -49,7 +49,7 @@ function changeToPython(...sockets) {
         }),
         `PYTHONHOME=${pythonhome}`,
         `PYTHONPATH=${pythonhome}`,
-        `SOCKET_TRANSFERRENCE=${sockets.join(',')}`,
+        `SOCKET_TRANSFERRENCE=${sockets.join('_')}`,
     ];
     // Close your eyes and forget all about node.
     execvpe(app, args, env);
