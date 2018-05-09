@@ -36,6 +36,8 @@ worker = flask.Blueprint('worker', __name__)
 
 
 def pong(fileno):
+    if fileno == 0:
+        return
     s = socket.socket(fileno=fileno)
     headers = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK"
     s.send(headers.encode('utf8'))
@@ -67,11 +69,17 @@ def main():
         log_timeout_secs=SUPERVISOR_LOG_TIMEOUT_SEC,
         kill_timeout_secs=SUPERVISOR_KILL_TIMEOUT_SEC)
     memory_handler = SupervisorHandler(
-        supervisor, MAX_LOG_BATCH_ENTRIES, MAX_LOG_LENGTH, flushLevel=logging.ERROR)
+        supervisor, MAX_LOG_BATCH_ENTRIES, MAX_LOG_LENGTH, flushLevel=logging.WARNING)
 
     root_logger = logging.getLogger()
     root_logger.setLevel('DEBUG')
     root_logger.addHandler(memory_handler)
+
+    sockets = [int(s) for s in os.environ['SOCKET_TRANSFERRENCE'].split(',')]
+    logger.error('Welcome to python! Enjoy your stay.', sockets=sockets)
+
+    server_socket = sockets[0]  # The first socket is the listening socket.
+    load_socket = sockets[-1]  # Guess that last socket is the loading request in progress.
 
     application = flask.Flask(__name__)
 
@@ -91,18 +99,18 @@ def main():
     @application.route('/<path:path>', methods=['GET', 'PUT', 'POST', 'DELETE', 'HEAD', 'PATCH'])
     def catch_all(path):
         res = f"Requested path has no associated handler: {path}"
-        logger.warning(res, method=flask.request.method, json=flask.request.json)
+        logger.error(res, method=flask.request.method, json=flask.request.json, headers=flask.request.headers)
         return flask.Response('', status=200)  # Not an error then?
 
     try:
-        pong(int(os.environ['PING_DESCRIPTOR']))
-        with LoadSocketResponder(fileno=int(os.environ['LOAD_DESCRIPTOR'])):
+        # pong(int(os.environ['PING_DESCRIPTOR']))
+        with LoadSocketResponder(fileno=load_socket):
             spec = importlib.util.spec_from_file_location("cloud", f"{CODE_LOCATION_DIR}/user_code/cloud.py")
             cloud = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(cloud)
             application.register_blueprint(cloud.blueprint, url_prefix='/execute')
 
-        os.environ['WERKZEUG_SERVER_FD'] = os.environ['SERVER_DESCRIPTOR']
+        os.environ['WERKZEUG_SERVER_FD'] = str(server_socket)
         logger.info("Python ready to serve")
         application.run(host='0.0.0.0', port=int(WORKER_PORT))
     except Exception as ex:

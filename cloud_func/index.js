@@ -32,11 +32,11 @@ function unsetCloseOnExec(descriptor) {
     lib.fcntl(descriptor, F_SETFD, (flags & ~FD_CLOEXEC));
 }
 
-function changeToPython(server_socket, ping_socket, load_socket) {
+function changeToPython(...sockets) {
     // Bring a select elite of file descriptors with us to the glory days.
-    unsetCloseOnExec(server_socket);
-    unsetCloseOnExec(ping_socket);
-    unsetCloseOnExec(load_socket);
+    sockets.forEach(socket => {
+        unsetCloseOnExec(socket);
+    });
     unsetCloseOnExec(0);
     unsetCloseOnExec(1);
     unsetCloseOnExec(2);
@@ -49,9 +49,7 @@ function changeToPython(server_socket, ping_socket, load_socket) {
         }),
         `PYTHONHOME=${pythonhome}`,
         `PYTHONPATH=${pythonhome}`,
-        `SERVER_DESCRIPTOR=${server_socket}`,
-        `PING_DESCRIPTOR=${ping_socket}`,
-        `LOAD_DESCRIPTOR=${load_socket}`,
+        `SOCKET_TRANSFERRENCE=${sockets.join(',')}`,
     ];
     // Close your eyes and forget all about node.
     execvpe(app, args, env);
