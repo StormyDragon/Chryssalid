@@ -5,7 +5,9 @@ ENV PYENV_ROOT="/app/pyenv" \
     PATH="$PYENV_ROOT/bin:$PATH"
 RUN git clone https://github.com/pyenv/pyenv.git pyenv \
  && ./pyenv/bin/pyenv install 3.6.5 \
- && ./pyenv/versions/3.6.5/bin/python -m pip install --upgrade pipenv pip
+ && ./pyenv/versions/3.6.5/bin/python -m pip install --upgrade pipenv pip \
+ && rm -rf `find -type d -name __pycache__` \
+ && rm -rf ./pyenv/versions/3.6.5/lib/python3.6/test
 COPY cloud_func/Pipfile cloud_func/Pipfile.lock ./
 RUN ./pyenv/versions/3.6.5/bin/python -m pipenv lock --requirements > requirements.txt \
  && ./pyenv/versions/3.6.5/bin/python -m pip install -r requirements.txt
@@ -26,8 +28,9 @@ COPY cloud_func/package.json cloud_func/yarn.lock ./
 RUN yarn install
 COPY cloud_func ./
 COPY --from=py_build /app/pyenv/versions/3.6.5 /app/python
-COPY user_code ./user_code
 RUN zip -9 -r package.zip .
+COPY user_code ./user_code
+RUN zip -9 -ur package.zip .
 
 ENV \
     X_GOOGLE_CODE_LOCATION=/app \
