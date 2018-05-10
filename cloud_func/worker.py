@@ -102,7 +102,7 @@ def main():
         data = dict(method=flask.request.method, json=flask.request.json, headers=flask.request.headers)
         res = f"Requested path has no associated handler: {path}\n\n{data!r}"
         logger.error(res)
-        return flask.Response('', status=200)  # Not an error then?
+        return flask.Response('', status=200)  # Just treat it as function success. The errror is logged.
 
     try:
         with LoadSocketResponder(sockets=sockets[1:]):
@@ -111,7 +111,8 @@ def main():
             spec.loader.exec_module(cloud)
             application.register_blueprint(cloud.blueprint, url_prefix='/execute')
 
-        logger.debug(f'Welcome to python! Enjoy your stay. sockets: {sockets!r}')
+
+        logger.debug(f'Welcome to python! Enjoy your stay.')
         memory_handler.flush_all()
         os.environ['WERKZEUG_SERVER_FD'] = str(server_socket)
         application.run(host='0.0.0.0', port=int(WORKER_PORT))
