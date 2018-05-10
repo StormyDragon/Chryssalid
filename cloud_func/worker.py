@@ -6,6 +6,7 @@ from traceback import format_exception
 
 import flask
 
+import cloud_functions
 from supervisor_logger import Supervisor, SupervisorHandler
 
 CODE_LOCATION_DIR = os.environ.get("X_GOOGLE_CODE_LOCATION")
@@ -105,11 +106,11 @@ def main():
         return flask.Response('', status=200)  # Just treat it as function success. The errror is logged.
 
     try:
+        cloud_functions.cloud_app = application
         with LoadSocketResponder(sockets=sockets[1:]):
             spec = importlib.util.spec_from_file_location("cloud", f"{CODE_LOCATION_DIR}/user_code/cloud.py")
             cloud = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(cloud)
-            application.register_blueprint(cloud.blueprint, url_prefix='/execute')
 
 
         logger.debug(f'Welcome to python! Enjoy your stay.')
