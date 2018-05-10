@@ -16,7 +16,7 @@ def check(f):
     return g
 
 
-def fix_firestore_frame(frame: dict):
+def fix_firebase_frame(frame: dict):
     """
     Firestore did not wrap the context, I will move things around a bit so it matches the pubsub frame
     :param frame:
@@ -39,7 +39,7 @@ def register_callable_trigger(receiver: Callable[[dict, Optional[dict]], None]):
     """
     trigger = flask.Blueprint('bucket_trigger', __name__)
 
-    @trigger.route('_ah/push-handlers/pubsub/projects/<str:project>/topics/<str:topic>', methods=['POST'])
+    @trigger.route('/_ah/push-handlers/pubsub/projects/<project>/topics/<topic>', methods=['POST'])
     def pubsub_handler(project, topic):
         header = {
             "project": project,
@@ -47,7 +47,7 @@ def register_callable_trigger(receiver: Callable[[dict, Optional[dict]], None]):
             "request": flask.request
         }
         frame = flask.request.json
-        frame = fix_firestore_frame(frame)
+        frame = fix_firebase_frame(frame)
         receiver(header, frame)
 
     cloud_app.register_blueprint(trigger, url_prefix='/execute')

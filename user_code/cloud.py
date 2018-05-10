@@ -13,9 +13,9 @@ def hello():
     return "Hello from Python!"
 
 
-@blueprint.route('_ah/push-handlers/pubsub/projects/<str:project>/topics/<str:topic>', methods=['POST'])
+@blueprint.route('/_ah/push-handlers/pubsub/projects/<project>/topics/<topic>', methods=['POST'])
 def call(project, topic):
-    frame = cloud_functions.fix_firestore_frame(flask.request.json)
+    frame = cloud_functions.fix_firebase_frame(flask.request.json)
     logger.info(f"PUBSUB call :>   {frame}")
     return ""
 
