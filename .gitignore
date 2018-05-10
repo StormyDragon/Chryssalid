@@ -2,3 +2,4 @@
 dist
 build
 package.zip
+__pycache__
