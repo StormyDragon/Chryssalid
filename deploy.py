@@ -38,10 +38,10 @@ def upload_package_zip(location):
 @click.option('--location', default='us-central1')
 @click.option('--prefix', default='test-trigger')
 def main(project, location, prefix):
-    upload_location = upload_package_zip(location)
     project_location = f"projects/{project}/locations/{location}"
+    upload_location = upload_package_zip(project_location)
 
-    response = functions.projects().locations().functions().list(location=location).execute()
+    response = functions.projects().locations().functions().list(location=project_location).execute()
     names = [item['name'] for item in response['functions']]
 
     def create_or_update(location, name, *, body):
@@ -50,59 +50,62 @@ def main(project, location, prefix):
         else:
             return functions.projects().locations().functions().create(location=location, body=body)
 
-    name = f"{project_location}/functions/trigger-firestore"
+    def name_f(name):
+        return f"{project_location}/functions/{prefix}-{name}"
+
+    func_name = name_f("firestore")
     body = {
-        "name": name,
+        "name": func_name,
         "sourceUploadUrl": upload_location,
         "eventTrigger": {
             "eventType": "providers/cloud.firestore/eventTypes/document.create",
-            "resource": f"projects/{project}/databases/" + "(default)/documents/trigger-firestore/{unique}",
+            "resource": f"projects/{project}/databases/" "(default)/documents/trigger-firestore/{unique}",
             # "failurePolicy": {"retry": {}}
         }
     }
     with error_handler():
-        response = create_or_update(project_location, name, body=body).execute()
+        response = create_or_update(project_location, func_name, body=body).execute()
         pprint(response)
 
-    name = f"{project_location}/functions/{prefix}-http"
+    func_name = name_f("http")
     body = {
-        "name": name,
+        "name": func_name,
         "sourceUploadUrl": upload_location,
         "httpsTrigger": {}
     }
 
     with error_handler():
-        response = create_or_update(project_location, name, body=body).execute()
+        response = create_or_update(project_location, func_name, body=body).execute()
         pprint(response)
 
-    name = f"{project_location }/functions/{prefix}-bucket"
+    func_name = name_f("bucket")
     body = {
-        "name": name,
+        "name": func_name,
         "sourceUploadUrl": upload_location,
         "eventTrigger": {
             "eventType": "google.storage.object.finalize",
-            "resource": "projects/stormweyr/buckets/stormweyr-trigger-bucket",
+            "resource": f"projects/{project}/buckets/{project}-trigger-bucket",
             # "failurePolicy": {"retry": {}}
         }
     }
 
     with error_handler():
-        response = create_or_update(project_location, name, body=body).execute()
+        response = create_or_update(project_location, func_name, body=body).execute()
         pprint(response)
 
-    name = f"{project_location }/functions/{prefix}-topic"
+    func_name = name_f("topic")
     body = {
-        "name": name,
+        "name": func_name,
         "sourceUploadUrl": upload_location,
         "eventTrigger": {
             "eventType": "google.pubsub.topic.publish",
-            "resource": "projects/stormweyr/topics/trigger-topic",
+            "resource": f"projects/{project}" "/topics/trigger-topic",
             # "failurePolicy": {"retry": {}}
         }
     }
 
     with error_handler():
-        response = create_or_update(project_location, name, body=body).execute()
+        response = create_or_update(project_location, func_name, body=body).execute()
         pprint(response)
 
 
