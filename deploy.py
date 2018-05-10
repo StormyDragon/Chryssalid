@@ -108,6 +108,21 @@ def main(project, location, prefix):
         response = create_or_update(project_location, func_name, body=body).execute()
         pprint(response)
 
+    func_name = name_f("realtime")
+    body = {
+        "name": func_name,
+        "sourceUploadUrl": upload_location,
+        "eventTrigger": {
+            "eventType": "providers/google.firebase.database/eventTypes/ref.create",
+            "resource": f"projects/_/instances/{project}" "/refs/trigger/{entry}",
+            # "failurePolicy": {"retry": {}}
+        }
+    }
+
+    with error_handler():
+        response = create_or_update(project_location, func_name, body=body).execute()
+        pprint(response)
+
 
 if __name__ == '__main__':
     main()
