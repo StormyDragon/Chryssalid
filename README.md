@@ -83,7 +83,7 @@ Events from firebase don't wrap the context in a sepate field.
 
 ### Firebase Realtime Database
 #### Event Resource Definition
-`projects/<project name>/instances/<instance|project name>/refs/<path>/{key}`
+`projects/_/instances/<instance|project name>/refs/<path>/{key}`
 #### Event Types
 * `providers/google.firebase.database/eventTypes/ref.create`
 * `providers/google.firebase.database/eventTypes/ref.write`
