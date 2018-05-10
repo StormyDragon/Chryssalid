@@ -60,3 +60,38 @@ Accept logs and kill command from worker
     ]
   }
 ```
+
+## Google Pub/Sub Events and Types
+
+### Firebase Firestore
+#### Event Resource Definition
+`projects/<project name>/databases/(default)/documents/<collection path>/{collectionId}`
+#### Event Types
+* `providers/cloud.firestore/eventTypes/document.create`
+* `providers/cloud.firestore/eventTypes/document.update`
+* `providers/cloud.firestore/eventTypes/document.delete`
+* `providers/cloud.firestore/eventTypes/document.write`
+
+### Firebase Realtime Database
+#### Event Resource Definition
+`projects/<project name>/instances/<instance|project name>/refs/<path>/{key}`
+#### Event Types
+* `providers/google.firebase.database/eventTypes/ref.create`
+* `providers/google.firebase.database/eventTypes/ref.write`
+* `providers/google.firebase.database/eventTypes/ref.update`
+* `providers/google.firebase.database/eventTypes/ref.delete`
+
+### Pub Sub Topics
+#### Event Resource Definition
+`projects/<project name>/topics/<topic name>`
+#### Event Types
+* `google.pubsub.topic.publish`
+
+### Cloud Storage
+#### Event Resource Definition
+`projects/<project name>/buckets/<bucket name>`
+#### Event Types
+* `google.storage.object.finalize`
+* `google.storage.object.metadata_update`
+* `google.storage.object.delete`
+* `google.storage.object.archive`
