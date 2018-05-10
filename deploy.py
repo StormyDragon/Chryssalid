@@ -123,6 +123,21 @@ def main(project, location, prefix):
         response = create_or_update(project_location, func_name, body=body).execute()
         pprint(response)
 
+    func_name = name_f("auth")
+    body = {
+        "name": func_name,
+        "sourceUploadUrl": upload_location,
+        "eventTrigger": {
+            "eventType": "providers/firebase.auth/eventTypes/user.create",
+            "resource": f"projects/{project}",
+            # "failurePolicy": {"retry": {}}
+        }
+    }
+
+    with error_handler():
+        response = create_or_update(project_location, func_name, body=body).execute()
+        pprint(response)
+
 
 if __name__ == '__main__':
     main()

@@ -63,6 +63,15 @@ Accept logs and kill command from worker
 
 ## Google Pub/Sub Events and Types
 
+Events from firebase don't wrap the context in a sepate field.
+
+### Firebase Auth
+#### Event Resource Definition
+`projects/<project name>`
+#### Event Types
+* `providers/firebase.auth/eventTypes/user.create`
+* `providers/firebase.auth/eventTypes/user.delete`
+
 ### Firebase Firestore
 #### Event Resource Definition
 `projects/<project name>/databases/(default)/documents/<collection path>/{collectionId}`

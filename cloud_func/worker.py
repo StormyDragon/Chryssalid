@@ -112,7 +112,6 @@ def main():
             cloud = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(cloud)
 
-
         logger.debug(f'Welcome to python! Enjoy your stay.')
         memory_handler.flush_all()
         os.environ['WERKZEUG_SERVER_FD'] = str(server_socket)
