@@ -32,6 +32,30 @@ FROM stormydragon/gcf-python
 CMD ['--http', '--project=<my project name>', '--name=<trigger name>']
 ```
 
+### But I want to listen to Firebase or cloud storage or something..
+That's good too, simply pick a resource and event type from below and use code similar to this
+you can find examples of the context and data in the `invocation data.md` file.
+
+`cloud.py`
+```python
+import cloud_functions
+import logging
+logger = logging.getLogger(__name__)
+
+
+def handler(context, data):
+    logger.info(context, data)
+
+
+cloud_functions.register_event_trigger(handler)
+```
+
+`Dockerfile`
+```dockerfile
+FROM stormydragon/gcf-python
+CMD ['--event', '--project=<my project name>', '--name=<trigger name>', '--resource=<the resource>', '--event=<the event>']
+```
+
 #### Run these commands
 ```shell
 pipenv install flask
