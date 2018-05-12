@@ -1,6 +1,45 @@
 # Chryssalid
 Grow within your enemy, then burst out.
 
+## I just want to get going
+Ok.
+
+### Prerequisites
+* Docker
+* Service Account json with `Google Cloud Functions Developer` role
+* Pipenv
+* Project with a `flask` blueprint
+
+
+```python
+import flask
+import cloud_functions
+
+blueprint = flask.Blueprint('hello', __name__)
+
+
+@blueprint.route('/')
+def hello():
+    return "Hello cloud functions."
+
+
+cloud_functions.register_http_trigger(blueprint)
+```
+
+```dockerfile
+FROM stormydragon/gcf-python
+CMD ['--http', '--project=<my project name>', '--name=<trigger name>']
+```
+
+```shell
+pipenv install flask
+docker build --tag my_cloud_function
+docker run --rm -it -v /path/to/service-account.json:/service-account.json:ro my_cloud_function
+```
+
+The container will package your project during build and by running it with the specified arguments
+will deploy the package to Google Cloud Functions
+
 ## Objective
 Replace google cloud function node interpreter with arbitrary code
 Instead of using node as a shim, simply replace node.js and be master control program of the container.
