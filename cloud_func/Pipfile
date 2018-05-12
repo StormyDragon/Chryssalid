@@ -6,6 +6,7 @@ name = "pypi"
 [packages]
 flask = "*"
 requests = "*"
+google-api-python-client = "*"
 
 [dev-packages]
 
