@@ -32,6 +32,13 @@ FROM stormydragon/gcf-python
 CMD ['--http', '--project=<my project name>', '--name=<trigger name>']
 ```
 
+#### Run these commands
+```shell
+pipenv install flask
+docker build --tag my_cloud_function .
+docker run --rm -it -v /path/to/service-account.json:/service-account.json:ro my_cloud_function
+```
+
 ### But I want to listen to Firebase or cloud storage or something..
 That's good too, simply pick a resource and event type from below and use code similar to this
 you can find examples of the context and data in the `invocation data.md` file.
