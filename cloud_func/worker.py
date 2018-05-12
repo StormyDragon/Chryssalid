@@ -2,6 +2,7 @@ import importlib.util
 import logging
 import os
 import socket
+import sys
 from traceback import format_exception
 
 import flask
@@ -111,6 +112,7 @@ def main():
     try:
         cloud_functions.cloud_app = application
         with LoadSocketResponder(sockets=sockets[1:]):
+            sys.path.append(f'{CODE_LOCATION_DIR}/user_code')
             spec = importlib.util.spec_from_file_location("cloud", f"{CODE_LOCATION_DIR}/user_code/cloud.py")
             cloud = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(cloud)
