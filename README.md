@@ -35,7 +35,7 @@ CMD ['--http', '--project=<my project name>', '--name=<trigger name>']
 #### Run these commands
 ```shell
 pipenv install flask
-docker build --tag my_cloud_function
+docker build --tag my_cloud_function .
 docker run --rm -it -v /path/to/service-account.json:/service-account.json:ro my_cloud_function
 ```
 
