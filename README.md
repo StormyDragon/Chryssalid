@@ -8,9 +8,9 @@ Ok.
 * Docker
 * Service Account json with `Google Cloud Functions Developer` role
 * Pipenv
-* Project with a `flask` blueprint
+* Project with a `flask` blueprint and an entry point called `cloud.py`
 
-
+#### `cloud.py`
 ```python
 import flask
 import cloud_functions
@@ -26,11 +26,13 @@ def hello():
 cloud_functions.register_http_trigger(blueprint)
 ```
 
+#### `Dockerfile`
 ```dockerfile
 FROM stormydragon/gcf-python
 CMD ['--http', '--project=<my project name>', '--name=<trigger name>']
 ```
 
+#### Run these commands
 ```shell
 pipenv install flask
 docker build --tag my_cloud_function
