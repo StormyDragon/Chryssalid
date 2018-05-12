@@ -63,9 +63,12 @@ class LoadSocketResponder:
             message = headers.encode('utf8') + exception_message
 
         for s in self.sockets:
-            load_socket = socket.socket(fileno=s)
-            load_socket.send(message)
-            load_socket.close()
+            try:
+                load_socket = socket.socket(fileno=s)
+                load_socket.send(message)
+                load_socket.close()
+            except Exception as ex:
+                logger.debug(f'socket {s} errored with {ex}')
 
 
 def main():
