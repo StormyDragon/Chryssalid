@@ -34,10 +34,6 @@ ENV PATH="/app/python/bin:$PATH" \
     PYTHONHOME="/app/python" \
     LC_ALL="C.UTF-8" \
     LANG="C.UTF-8"
-COPY user_code/Pipfile user_code/Pipfile.lock ./
-RUN python -m pipenv lock --requirements > requirements.txt \
- && python -m pip install -r requirements.txt
-COPY user_code ./user_code
 RUN zip -9 -ur package.zip .
 COPY deployer /deployer
 
