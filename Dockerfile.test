@@ -39,7 +39,7 @@ RUN python -m pipenv lock --requirements > requirements.txt \
  && python -m pip install -r requirements.txt
 COPY user_code ./user_code
 RUN zip -9 -ur package.zip .
-COPY deployer /deployer
+RUN pipenv --help
 
 ONBUILD COPY Pipfile Pipfile.lock ./
 ONBUILD RUN python -m pipenv lock --requirements > requirements.txt \
@@ -47,5 +47,14 @@ ONBUILD RUN python -m pipenv lock --requirements > requirements.txt \
 ONBUILD COPY . ./user_code
 ONBUILD RUN zip -9 -ur package.zip .
 
-ENV GOOGLE_APPLICATION_CREDENTIALS=/service-account.json
-ENTRYPOINT ["python", "/deployer/deploy.py", "--package=package.zip"]
+
+ENV \
+    X_GOOGLE_CODE_LOCATION=/app \
+    X_GOOGLE_ENTRY_POINT=hello \
+    X_GOOGLE_SUPERVISOR_HOSTNAME=192.168.86.101 \
+    X_GOOGLE_SUPERVISOR_INTERNAL_PORT=8080 \
+    X_GOOGLE_FUNCTION_TRIGGER_TYPE=HTTP_TRIGGER \
+    X_GOOGLE_FUNCTION_TIMEOUT_SEC=60 \
+    X_GOOGLE_WORKER_PORT=80
+
+CMD ["node", "/tmp/cloud_worker/worker.js"]
