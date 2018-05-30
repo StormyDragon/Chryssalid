@@ -8,7 +8,7 @@ functions = discovery.build('cloudfunctions', 'v1beta2')
 def create_or_update(body):
     project_location, _ = body['name'].split('/functions/', 1)
     response = functions.projects().locations().functions().list(location=project_location).execute()
-    names = [item['name'] for item in response['functions']]
+    names = [item['name'] for item in response.get('functions', [])]
     if body['name'] in names:
         return functions.projects().locations().functions().update(name=body['name'], body=body)
     else:
