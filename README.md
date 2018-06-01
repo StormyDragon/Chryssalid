@@ -29,7 +29,7 @@ cloud_functions.register_http_trigger(blueprint)
 #### `Dockerfile`
 ```dockerfile
 FROM stormydragon/gcf-python
-CMD ['--http', '--project=<my project name>', '--name=<trigger name>']
+CMD ["--http", "--project=<my project name>", "--name=<trigger name>"]
 ```
 
 #### Run these commands
@@ -60,7 +60,7 @@ cloud_functions.register_event_trigger(handler)
 `Dockerfile`
 ```dockerfile
 FROM stormydragon/gcf-python
-CMD ['--event', '--project=<my project name>', '--name=<trigger name>', '--resource=<the resource>', '--event=<the event>']
+CMD ["--event", "--project=<my project name>", "--name=<trigger name>", "--resource=<the resource>", "--event=<the event>"]
 ```
 
 #### Run these commands
