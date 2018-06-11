@@ -2,15 +2,15 @@ import click
 import requests
 from googleapiclient import discovery
 
-functions = discovery.build('cloudfunctions', 'v1beta2')
+functions = discovery.build('cloudfunctions', 'v1')
 
 
 def create_or_update(body):
     project_location, _ = body['name'].split('/functions/', 1)
-    response = functions.projects().locations().functions().list(location=project_location).execute()
+    response = functions.projects().locations().functions().list(parent=project_location).execute()
     names = [item['name'] for item in response.get('functions', [])]
     if body['name'] in names:
-        return functions.projects().locations().functions().update(name=body['name'], body=body)
+        return functions.projects().locations().functions().patch(name=body['name'], body=body)
     else:
         return functions.projects().locations().functions().create(location=project_location, body=body)
 
