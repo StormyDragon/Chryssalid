@@ -1,16 +1,125 @@
-FROM python AS py_build
+FROM debian:stretch-slim AS py_build
 
+# ensure local python is preferred over distribution python
+ENV PATH /app/python/bin:$PATH
+
+# http://bugs.python.org/issue19846
+# > At the moment, setting "LANG=C" on a Linux system *fundamentally breaks Python 3*, and that's not OK.
+ENV LANG C.UTF-8
+
+# runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+		ca-certificates \
+		libexpat1 \
+		libffi6 \
+		libgdbm3 \
+		libreadline7 \
+		libsqlite3-0 \
+		libssl1.1 \
+		netbase \
+	&& rm -rf /var/lib/apt/lists/*
+
+ENV GPG_KEY 0D96DF4D4110E5C43FBFB17F2D347EA6AA65421D
+ENV PYTHON_VERSION 3.7.0b5
+
+RUN set -ex \
+	&& buildDeps=" \
+		dpkg-dev \
+		gcc \
+		libbz2-dev \
+		libc6-dev \
+		libexpat1-dev \
+		libffi-dev \
+		libgdbm-dev \
+		liblzma-dev \
+		libncursesw5-dev \
+		libreadline-dev \
+		libsqlite3-dev \
+		libssl-dev \
+		make \
+		tcl-dev \
+		tk-dev \
+		wget \
+		xz-utils \
+		zlib1g-dev \
+		$(command -v gpg > /dev/null || echo 'gnupg dirmngr') \
+	" \
+	&& apt-get update && apt-get install -y $buildDeps --no-install-recommends && rm -rf /var/lib/apt/lists/* \
+	\
+	&& wget -O python.tar.xz "https://www.python.org/ftp/python/${PYTHON_VERSION%%[a-z]*}/Python-$PYTHON_VERSION.tar.xz" \
+	&& wget -O python.tar.xz.asc "https://www.python.org/ftp/python/${PYTHON_VERSION%%[a-z]*}/Python-$PYTHON_VERSION.tar.xz.asc" \
+	&& export GNUPGHOME="$(mktemp -d)" \
+	&& gpg --keyserver ha.pool.sks-keyservers.net --recv-keys "$GPG_KEY" \
+	&& gpg --batch --verify python.tar.xz.asc python.tar.xz \
+	&& rm -rf "$GNUPGHOME" python.tar.xz.asc \
+	&& mkdir -p /usr/src/python \
+	&& tar -xJC /usr/src/python --strip-components=1 -f python.tar.xz \
+	&& rm python.tar.xz \
+	\
+	&& cd /usr/src/python \
+	&& gnuArch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)" \
+	&& ./configure \
+		--build="$gnuArch" \
+		--enable-loadable-sqlite-extensions \
+		--enable-shared \
+		--with-system-expat \
+		--with-system-ffi \
+		--without-ensurepip \
+		--prefix="/app/python" \
+		LDFLAGS="-Wl,--rpath=/app/python/lib" \
+	&& make -j "$(nproc)" \
+	&& make install \
+	&& ldconfig \
+	\
+	&& apt-get purge -y --auto-remove $buildDeps \
+	\
+	&& find /app/python -depth \
+		\( \
+			\( -type d -a \( -name test -o -name tests \) \) \
+			-o \
+			\( -type f -a \( -name '*.pyc' -o -name '*.pyo' \) \) \
+		\) -exec rm -rf '{}' + \
+	&& rm -rf /usr/src/python
+
+# make some useful symlinks that are expected to exist
+RUN cd /app/python/bin \
+	&& ln -s idle3 idle \
+	&& ln -s pydoc3 pydoc \
+	&& ln -s python3 python \
+	&& ln -s python3-config python-config
+
+# if this is called "PIP_VERSION", pip explodes with "ValueError: invalid truth value '<VERSION>'"
+ENV PYTHON_PIP_VERSION 10.0.1
+
+RUN set -ex; \
+	\
+	apt-get update; \
+	apt-get install -y --no-install-recommends wget; \
+	rm -rf /var/lib/apt/lists/*; \
+	\
+	wget -O get-pip.py 'https://bootstrap.pypa.io/get-pip.py'; \
+	\
+	apt-get purge -y --auto-remove wget; \
+	\
+	python get-pip.py \
+		--disable-pip-version-check \
+		--no-cache-dir \
+		"pip==$PYTHON_PIP_VERSION" \
+	; \
+	pip --version; \
+	\
+	find /app/python -depth \
+		\( \
+			\( -type d -a \( -name test -o -name tests \) \) \
+			-o \
+			\( -type f -a \( -name '*.pyc' -o -name '*.pyo' \) \) \
+		\) -exec rm -rf '{}' +; \
+	rm -f get-pip.py
+
+RUN pip install pipenv
 WORKDIR /app
-ENV PYENV_ROOT="/app/pyenv" \
-    PATH="$PYENV_ROOT/bin:$PATH"
-RUN git clone https://github.com/pyenv/pyenv.git pyenv \
- && ./pyenv/bin/pyenv install 3.6.5 \
- && ./pyenv/versions/3.6.5/bin/python -m pip install --upgrade pipenv pip \
- && rm -rf `find -type d -name __pycache__` \
- && rm -rf ./pyenv/versions/3.6.5/lib/python3.6/test
 COPY cloud_func/Pipfile cloud_func/Pipfile.lock ./
-RUN ./pyenv/versions/3.6.5/bin/python -m pipenv lock --requirements > requirements.txt \
- && ./pyenv/versions/3.6.5/bin/python -m pip install -r requirements.txt
+RUN pipenv install --system --verbose
 
 FROM gcr.io/google-appengine/nodejs as final
 RUN install_node v6.11.5 \
@@ -28,7 +137,7 @@ WORKDIR /app
 COPY cloud_func/package.json cloud_func/yarn.lock ./
 RUN yarn install
 COPY cloud_func ./
-COPY --from=py_build /app/pyenv/versions/3.6.5 /app/python
+COPY --from=py_build /app/python /app/python
 ENV PATH="/app/python/bin:$PATH" \
     PYTHONPATH="/app/python" \
     PYTHONHOME="/app/python" \
@@ -38,8 +147,7 @@ RUN zip -9 -ur package.zip .
 COPY deployer /deployer
 
 ONBUILD COPY Pipfile Pipfile.lock ./
-ONBUILD RUN python -m pipenv lock --requirements > requirements.txt \
- && python -m pip install -r requirements.txt
+ONBUILD RUN pipenv install --system
 ONBUILD COPY . ./user_code
 ONBUILD RUN zip -9 -ur package.zip .
 
