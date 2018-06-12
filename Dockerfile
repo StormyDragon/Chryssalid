@@ -88,6 +88,12 @@ RUN cd /app/python/bin \
 	&& ln -s python3 python \
 	&& ln -s python3-config python-config
 
+# Copy required libs out to application folder
+RUN cp /usr/lib/x86_64-linux-gnu/libssl.so.1.1 /app/python/lib \
+ && cp /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1 /app/python/lib \
+ && true
+
+
 # if this is called "PIP_VERSION", pip explodes with "ValueError: invalid truth value '<VERSION>'"
 ENV PYTHON_PIP_VERSION 10.0.1
 
