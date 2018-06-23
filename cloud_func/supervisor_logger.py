@@ -70,15 +70,19 @@ class SupervisorHandler(MemoryHandler):
         super().__init__(max_batch_entries, **config)
         self.supervisor = supervisor
         self.max_log_length = max_log_length
+        self.can_flush = False
 
     def shouldFlush(self, record):
         return super().shouldFlush(record) or len(record.getMessage()) > self.max_log_length
 
     def flush(self):
-        records, self.buffer = self.buffer[:self.capacity], self.buffer[self.capacity:]
-        if records:
-            self.supervisor.log(records)
-        return bool(records)
+        if self.can_flush:
+            records, self.buffer = self.buffer[:self.capacity], self.buffer[self.capacity:]
+            if records:
+                self.supervisor.log(records)
+            return bool(records)
+        else:
+            return False
 
     def flush_all(self):
         while self.flush():
