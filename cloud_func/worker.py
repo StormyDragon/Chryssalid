@@ -64,16 +64,12 @@ class LoadSocketResponder:
             message = headers.encode('utf8') + exception_message
 
         for s in self.sockets:
-            step = None
             try:
-                step = "Pickup"
-                load_socket = socket.socket(family=socket.AF_INET6, type=socket.SOCK_STREAM, fileno=s)
-                step = "Send"
+                load_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP, fileno=s)
                 load_socket.send(message)
-                step = "Close"
                 load_socket.close()
             except Exception as ex:
-                logger.debug(f'socket {s} errored during {step} with {ex}')
+                logger.debug(f'socket {s} errored with {ex}')
 
 
 def build_worker_app(flushable_log_handler):
