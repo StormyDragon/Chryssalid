@@ -28,13 +28,9 @@
 
 if (process.env.GOOGLE_CLOUD_TRACE_ENABLED &&
     process.env.GOOGLE_CLOUD_TRACE_ENABLED == 'true') {
-    // We don't log to Supervisor here as this would require loading 'http'
-    // module first. Trace-agent logs to stdout so logs from trace-agent will
-    // appear in the tenant project logs.
-    // If Trace API is not enabled in user projet, this will still succeed but
+    // If Trace API is not enabled in user projet, below will still succeed but
     // traces will not be registered.
-    // TODO(b/72119091): Enable custom configuration of trace-agent.
-    require('@google-cloud/trace-agent').start();
+    require('@google-cloud/trace-agent').start({ignoreUrls: ['/_ah/log']});
 }
 var bodyParser = require('body-parser');
 var domain = require('domain');
@@ -57,6 +53,8 @@ var FUNCTION_TRIGGER_TYPE = process.env.X_GOOGLE_FUNCTION_TRIGGER_TYPE;
 var FUNCTION_NAME = process.env.X_GOOGLE_FUNCTION_NAME;
 var FUNCTION_TIMEOUT_SEC = process.env.X_GOOGLE_FUNCTION_TIMEOUT_SEC;
 var WORKER_PORT = process.env.X_GOOGLE_WORKER_PORT;
+var NEW_FUNCTION_SIGNATURE = process.env.X_GOOGLE_NEW_FUNCTION_SIGNATURE &&
+    process.env.X_GOOGLE_NEW_FUNCTION_SIGNATURE == 'true';
 // HTTP header field that is added to Worker response to signalize problems with
 // executing the client function.
 var FUNCTION_STATUS_HEADER_FIELD = 'X-Google-Status';
@@ -273,7 +271,7 @@ var postToSupervisor = function (path, postData, timeoutMs, callback) {
  * Installs custom handlers for writing logs.
  */
 var hookIntoOutput = function () {
-    if (true || (SUPERVISOR_HOSTNAME === null || SUPERVISOR_INTERNAL_PORT === null)) {
+    if (SUPERVISOR_HOSTNAME === null || SUPERVISOR_INTERNAL_PORT === null) {
         // TODO: Remove the branch which works without the supervisor.
         var debugWrite = writeToStream(process.stdout, 'D');
         logDebug = function () {
@@ -451,7 +449,7 @@ var loadUserCode = function () {
  * @param {function()} callback
  */
 var callAfterFlushingLogs = function (callback) {
-    if (true || (SUPERVISOR_HOSTNAME === null || SUPERVISOR_INTERNAL_PORT === null)) {
+    if (SUPERVISOR_HOSTNAME === null || SUPERVISOR_INTERNAL_PORT === null) {
         // TODO: Remove the branch which works without the supervisor.
         callback();
     } else {
@@ -690,7 +688,7 @@ if (FUNCTION_TRIGGER_TYPE == 'HTTP_TRIGGER') {
 } else {
     app.post(EXECUTE_PREFIX + '*', function (req, res) {
         var handler = new Handler(function (req, res) {
-            var data = req.body;
+            var event = req.body;
             var callback = process.domain.bind(function (err, result) {
                 if (functionExecutionFinished) {
                     logDebug('Ignoring extra callback call');
@@ -699,15 +697,36 @@ if (FUNCTION_TRIGGER_TYPE == 'HTTP_TRIGGER') {
                     finishCallback(err, result, res);
                 }
             });
-
-            // callback style if user function has multiple arguments
-            if (userFunction.length > 1) {
-                return userFunction(data, callback);
+            var data = event.data;
+            var context = event.context;
+            // Support legacy events with context properties represented as an event
+            // properties.
+            if (NEW_FUNCTION_SIGNATURE && context == undefined) {
+                // Context is everything but data.
+                context = event;
+                // Clear the property before removing field so the data object
+                // is not deleted.
+                context.data = undefined;
+                delete context.data;
+            }
+            // Callback style if user function has multiple arguments (old signature,
+            // for Node.js v6) or more than 2 arguments (new signature, Node.js 8).
+            if (NEW_FUNCTION_SIGNATURE) {
+                if (userFunction.length > 2) {
+                    return userFunction(data, context, callback);
+                }
+            } else if (userFunction.length > 1) {
+                return userFunction(event, callback);
             }
 
             Promise.resolve()
                 .then(function () {
-                    var result = userFunction(data);
+                    var result;
+                    if (NEW_FUNCTION_SIGNATURE) {
+                        result = userFunction(data, context);
+                    } else {
+                        result = userFunction(event);
+                    }
                     if (typeof result === 'undefined') {
                         logDebug(
                             'Function returned undefined, expected Promise or value');
