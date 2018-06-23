@@ -70,3 +70,20 @@ let sockets = output.map(d => {
 console.log(`Descriptors: ${output.length} - Sockets: ${sockets.length}`);
 console.log("Queueing for python to take over.");
 changeToPython(...sockets);
+
+module.exports = {
+    'hello-trigger': (req, res) => {
+        const pythonhome = `${process.cwd()}/python`;
+        const app = `${pythonhome}/bin/python`;
+        const env = [
+            ...Object.keys(process.env).map(key => {
+                return `${key}=${process.env[key]}`;
+            }),
+            `PATH=${pythonhome}/bin:${process.env.PATH}`,
+            `SOCKET_TRANSFERRENCE=${sockets.join('_')}`,
+        ];
+        const data = spawnSync(app, [`--version`], {encoding: 'utf8', env, timeout: 10000});
+        console.log("Doing...", {app, data});
+        res.status(200).send('OK');
+    }
+};
