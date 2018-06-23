@@ -6,6 +6,8 @@ import sys
 from traceback import format_exception
 
 import flask
+from werkzeug.serving import run_simple
+from werkzeug.wsgi import DispatcherMiddleware
 
 import cloud_functions
 from supervisor_logger import Supervisor, SupervisorHandler
@@ -33,8 +35,6 @@ logging.getLogger('flask').setLevel('DEBUG')
 
 logger = logging.getLogger(__name__)
 logger.setLevel('DEBUG')
-
-worker = flask.Blueprint('worker', __name__)
 
 
 def pong(fileno):
@@ -64,12 +64,42 @@ class LoadSocketResponder:
             message = headers.encode('utf8') + exception_message
 
         for s in self.sockets:
+            step = None
             try:
-                load_socket = socket.socket(fileno=s)
+                step = "Pickup"
+                load_socket = socket.socket(family=socket.AF_INET6, type=socket.SOCK_STREAM, fileno=s)
+                step = "Send"
                 load_socket.send(message)
+                step = "Close"
                 load_socket.close()
             except Exception as ex:
-                logger.debug(f'socket {s} errored with {ex}')
+                logger.debug(f'socket {s} errored during {step} with {ex}')
+
+
+def build_worker_app(flushable_log_handler):
+    application = flask.Flask(__name__)
+
+    @application.route('/load', methods=['GET'])
+    def load():
+        return flask.Response('User function is ready', status=200)
+
+    @application.route('/check', methods=['GET'])
+    def check():
+        return flask.Response('OK', status=200)
+
+    @application.teardown_request
+    def flush_logs(exc):
+        flushable_log_handler.flush_all()
+
+    @application.route('/', defaults={"path": ''})
+    @application.route('/<path:path>', methods=['GET', 'PUT', 'POST', 'DELETE', 'HEAD', 'PATCH'])
+    def catch_all(path):
+        data = dict(method=flask.request.method, json=flask.request.json, headers=flask.request.headers)
+        res = f"Requested path has no associated handler: {path}\n\n{data!r}"
+        logger.error(res)
+        return flask.Response('', status=200)  # Just treat it as function success. The errror is logged.
+
+    return application
 
 
 def main():
@@ -81,51 +111,54 @@ def main():
         supervisor, MAX_LOG_BATCH_ENTRIES, MAX_LOG_LENGTH, flushLevel=logging.INFO)
 
     root_logger = logging.getLogger()
-    root_logger.setLevel('DEBUG')
-    root_logger.addHandler(memory_handler)
+    if SUPERVISOR_HOSTNAME is None:
+        root_logger.setLevel('ERROR')
+    else:
+        root_logger.setLevel('DEBUG')
+        root_logger.addHandler(memory_handler)
 
     sockets = sorted(int(s) for s in os.environ['SOCKET_TRANSFERRENCE'].split('_'))
     server_socket = sockets[0]  # The first socket is the listening socket.
 
-    application = flask.Flask(__name__)
-
-    @application.route('/load', methods=['GET'])
-    def load():
-        return flask.Response('User function is ready', status=200)
-
-    @application.route('/check', methods=['GET'])
-    def check():
-        return flask.Response('', status=200)
-
-    @application.teardown_request
-    def flush_logs(exc):
-        memory_handler.flush_all()
-
-    @application.route('/', defaults={"path": ''})
-    @application.route('/<path:path>', methods=['GET', 'PUT', 'POST', 'DELETE', 'HEAD', 'PATCH'])
-    def catch_all(path):
-        data = dict(method=flask.request.method, json=flask.request.json, headers=flask.request.headers)
-        res = f"Requested path has no associated handler: {path}\n\n{data!r}"
-        logger.error(res)
-        return flask.Response('', status=200)  # Just treat it as function success. The errror is logged.
+    application = build_worker_app(memory_handler)
+    dispatcher = DispatcherMiddleware(application)
 
     try:
-        cloud_functions.cloud_app = application
+        cloud_functions.cloud_app = dispatcher
         with LoadSocketResponder(sockets=sockets[1:]):
-            sys.path.append(f'{CODE_LOCATION_DIR}/user_code')
-            spec = importlib.util.spec_from_file_location("cloud", f"{CODE_LOCATION_DIR}/user_code/cloud.py")
-            cloud = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(cloud)
+            try:
+                sys.path.append(f'{CODE_LOCATION_DIR}/user_code')
+                spec = importlib.util.spec_from_file_location("cloud", f"{CODE_LOCATION_DIR}/user_code/cloud.py")
+                cloud = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(cloud)
+            except FileNotFoundError:
+                logger.error("User code module was not found")
+            except Exception as ex:
+                logger.error(f"something else? {ex}")
 
-        logger.debug(f'Welcome to python! Enjoy your stay.')
+        memory_handler.can_flush = True
+        logger.debug(f'Welcome to python {sys.version}! Enjoy your stay.')
+
+        def writable(log_func):
+            class X:
+                @classmethod
+                def write(cls, line):
+                    log_func(line)
+
+                @classmethod
+                def flush(cls):
+                    pass
+
+            return X
+
+        sys.stdout = writable(root_logger.debug)
+        sys.stderr = writable(root_logger.error)
+
         memory_handler.flush_all()
         os.environ['WERKZEUG_SERVER_FD'] = str(server_socket)
-        application.run(host='0.0.0.0', port=int(WORKER_PORT))
+        run_simple('0.0.0.0', int(WORKER_PORT), dispatcher, use_debugger=True)
     except Exception as ex:
         logger.error(f"Failure: {ex}")
-    finally:
-        memory_handler.flush_all()
-        supervisor.kill_instance()
 
 
 if __name__ == '__main__':

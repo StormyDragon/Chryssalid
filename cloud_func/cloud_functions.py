@@ -1,9 +1,12 @@
 from functools import wraps
 from typing import Callable, Optional
+import logging
 
 import flask
+from werkzeug.wsgi import DispatcherMiddleware
 
-cloud_app: flask.Flask = None
+cloud_app: DispatcherMiddleware = None
+logger = logging.getLogger()
 
 
 def check(f):
@@ -37,7 +40,7 @@ def register_callable_trigger(receiver: Callable[[dict, Optional[dict]], None]):
     :param receiver: Method which accepts the header, and the posted JSON.
     :return:
     """
-    trigger = flask.Blueprint('bucket_trigger', __name__)
+    trigger = flask.Flask(__name__)
 
     @trigger.route('/_ah/push-handlers/pubsub/projects/<project>/topics/<topic>', methods=['POST'])
     def pubsub_handler(project, topic):
@@ -50,15 +53,17 @@ def register_callable_trigger(receiver: Callable[[dict, Optional[dict]], None]):
         frame = fix_firebase_frame(frame)
         receiver(header, frame)
 
-    cloud_app.register_blueprint(trigger, url_prefix='/execute')
+    cloud_app.mounts['/execute'] = trigger
+    logger.debug("mounted application pubsub call")
 
 
 @check
-def register_http_trigger(blueprint: flask.Blueprint):
+def register_http_trigger(wsgi_application):
     """
     Register blueprint for HTTP trigger
-    :type blueprint: flask.Blueprint
-    :param blueprint:
+    :type wsgi_application:
+    :param wsgi_application:
     :return:
     """
-    cloud_app.register_blueprint(blueprint, url_prefix='/execute')
+    cloud_app.mounts['/execute'] = wsgi_application
+    logger.debug("mounted application http call")
