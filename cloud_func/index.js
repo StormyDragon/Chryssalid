@@ -47,8 +47,7 @@ function changeToPython(...sockets) {
         ...Object.keys(process.env).map(key => {
             return `${key}=${process.env[key]}`;
         }),
-        `PYTHONHOME=${pythonhome}`,
-        `PYTHONPATH=${pythonhome}`,
+        `PATH=${pythonhome}/bin:${process.env.PATH}`,
         `SOCKET_TRANSFERRENCE=${sockets.join('_')}`,
     ];
     // Close your eyes and forget all about node.
@@ -66,7 +65,7 @@ let sockets = output.map(d => {
     } catch (err) {
     }
     return null;
-}).filter(s => s !== null).map(s => parseInt(s)).sort((a,b) => a-b);
+}).filter(s => s !== null).map(s => parseInt(s)).sort((a, b) => a - b);
 
 console.log(`Descriptors: ${output.length} - Sockets: ${sockets.length}`);
 console.log("Queueing for python to take over.");

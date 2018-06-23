@@ -1,7 +1,7 @@
 FROM debian:stretch-slim AS py_build
 
 # ensure local python is preferred over distribution python
-ENV PATH /app/python/bin:$PATH
+ENV PATH /user_code/python/bin:$PATH
 
 # http://bugs.python.org/issue19846
 # > At the moment, setting "LANG=C" on a Linux system *fundamentally breaks Python 3*, and that's not OK.
@@ -65,15 +65,15 @@ RUN set -ex \
 		--with-system-expat \
 		--with-system-ffi \
 		--without-ensurepip \
-		--prefix="/app/python" \
-		LDFLAGS="-Wl,--rpath=/app/python/lib" \
+		--prefix="/user_code/python" \
+		LDFLAGS="-Wl,--rpath=/user_code/python/lib" \
 	&& make -j "$(nproc)" \
 	&& make install \
 	&& ldconfig \
 	\
 	&& apt-get purge -y --auto-remove $buildDeps \
 	\
-	&& find /app/python -depth \
+	&& find /user_code/python -depth \
 		\( \
 			\( -type d -a \( -name test -o -name tests \) \) \
 			-o \
@@ -82,15 +82,15 @@ RUN set -ex \
 	&& rm -rf /usr/src/python
 
 # make some useful symlinks that are expected to exist
-RUN cd /app/python/bin \
+RUN cd /user_code/python/bin \
 	&& ln -s idle3 idle \
 	&& ln -s pydoc3 pydoc \
 	&& ln -s python3 python \
 	&& ln -s python3-config python-config
 
 # Copy required libs out to application folder
-RUN cp /usr/lib/x86_64-linux-gnu/libssl.so.1.1 /app/python/lib \
- && cp /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1 /app/python/lib \
+RUN cp /usr/lib/x86_64-linux-gnu/libssl.so.1.1 /user_code/python/lib \
+ && cp /usr/lib/x86_64-linux-gnu/libcrypto.so.1.1 /user_code/python/lib \
  && true
 
 
@@ -114,7 +114,7 @@ RUN set -ex; \
 	; \
 	pip --version; \
 	\
-	find /app/python -depth \
+	find /user_code/python -depth \
 		\( \
 			\( -type d -a \( -name test -o -name tests \) \) \
 			-o \
@@ -123,39 +123,39 @@ RUN set -ex; \
 	rm -f get-pip.py
 
 RUN pip install pipenv
-WORKDIR /app
+WORKDIR /user_code
 COPY cloud_func/Pipfile cloud_func/Pipfile.lock ./
 RUN pipenv install --system --verbose
 
 FROM gcr.io/google-appengine/nodejs as final
-RUN install_node v6.11.5 \
+RUN install_node v6.14.0 \
  && apt-get update \
  && apt-get install -y zip \
  && export CLOUD_SDK_REPO="cloud-sdk-jessie" \
  && echo "deb http://packages.cloud.google.com/apt $CLOUD_SDK_REPO main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list \
  && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - \
  && apt-get update -y && apt-get install google-cloud-sdk -y
+WORKDIR /user_code
+COPY --from=py_build /user_code/python /user_code/python
+RUN zip -9 -ur package.zip .
 WORKDIR /tmp/cloud_worker
 COPY google_cloud_worker/yarn.lock google_cloud_worker/package.json ./
 RUN yarn install
 COPY google_cloud_worker/worker.js ./
-WORKDIR /app
+WORKDIR /user_code
 COPY cloud_func/package.json cloud_func/yarn.lock ./
 RUN yarn install
+RUN zip -9 -ur package.zip .
 COPY cloud_func ./
-COPY --from=py_build /app/python /app/python
-ENV PATH="/app/python/bin:$PATH" \
-    PYTHONPATH="/app/python" \
-    PYTHONHOME="/app/python" \
-    LC_ALL="C.UTF-8" \
+ENV    LC_ALL="C.UTF-8" \
     LANG="C.UTF-8"
 RUN zip -9 -ur package.zip .
 COPY deployer /deployer
 
 ONBUILD COPY Pipfile Pipfile.lock ./
-ONBUILD RUN pipenv install --system
+ONBUILD RUN /user_code/python/bin/python -m pipenv install --system
 ONBUILD COPY . ./user_code
 ONBUILD RUN zip -9 -ur package.zip .
 
 ENV GOOGLE_APPLICATION_CREDENTIALS=/service-account.json
-ENTRYPOINT ["python", "/deployer/deploy.py", "--package=package.zip"]
+ENTRYPOINT ["/user_code/python/bin/python", "/deployer/deploy.py", "--package=package.zip"]
