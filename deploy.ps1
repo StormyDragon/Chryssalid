@@ -1,8 +1,8 @@
 $ErrorActionPreference = "Stop"
+$ProjectName = "stormweyr"
+$TriggerName = "hello-trigger"
 
 docker build -t cloud_build -f .\Dockerfile .
-docker create --name cloud_build_instance cloud_build
-docker cp cloud_build_instance:/app/package.zip package.zip
-docker rm cloud_build_instance
+docker build -t cloud_example -f examples\Dockerfile examples
 
-python -m deploy --project stormweyr --prefix trigger
+docker run --rm -it -v ${ServiceAccount}:/service-account.json:ro cloud_example --http --project=${ProjectName} --name=${TriggerName}
