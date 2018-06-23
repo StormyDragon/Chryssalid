@@ -1,3 +1,5 @@
+from time import sleep
+
 import click
 import requests
 from googleapiclient import discovery
@@ -38,7 +40,13 @@ def deploy(package, project, location, name, *, body):
         "sourceUploadUrl": upload_location,
         **body
     }).execute()
-    print(response)
+    version_id = response['metadata']['versionId']
+    new_version = '0'
+    while new_version != version_id:
+        sleep(5)
+        response = functions.projects().locations().functions().get(name=function_name).execute()
+        new_version = response['versionId']
+    print(f"Version {response['versionId']} deployed - status: {response['status']}")
 
 
 def deploy_http(package, project, location, name):
