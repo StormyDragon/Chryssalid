@@ -15,15 +15,15 @@ Ok.
 import flask
 import cloud_functions
 
-blueprint = flask.Blueprint('hello', __name__)
+flask_app = flask.Flask(__name__)
 
 
-@blueprint.route('/')
+@flask_app.route('/')
 def hello():
     return "Hello cloud functions."
 
 
-cloud_functions.register_http_trigger(blueprint)
+cloud_functions.register_http_trigger(flask_app)
 ```
 
 #### `Dockerfile`
