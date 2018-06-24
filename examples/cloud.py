@@ -7,7 +7,7 @@ flask_application = flask.Flask(__name__)
 logger = logging.getLogger(__name__)
 
 
-@flask_application.route('/')
+@flask_application.route('/', strict_slashes=False)
 def hello():
     logger.info("Hoy!")
     return "Hello from Python!"
