@@ -2,7 +2,9 @@
 Grow within your enemy, then burst out.
 
 ## I just want to get going
-Ok.
+Discouraged, google has since enabled python as a proper function
+engine, and this project now only serves as insight into the inner
+workings of google cloud functions.
 
 ### Prerequisites
 * Docker
